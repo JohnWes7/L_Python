@@ -7,3 +7,6 @@ print(a < b)
 print(a > b)
 print(a == b)
 print(a != b)
+
+# 三元表达式 取最大值
+max = a if a > b else b

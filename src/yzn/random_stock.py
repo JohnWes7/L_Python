@@ -1,4 +1,5 @@
 import random
+import sys
 from time import sleep
 from numpy import Infinity
 from openpyxl import Workbook
@@ -24,35 +25,50 @@ ip_pool_api = "http://15140409061.v4.dailiyun.com/query.txt?key=NPX029206M&word=
 save_path = "yzn.xlsx"
 
 # proxyaddr = "代理IP地址"    #代理IP地址
-# proxyport = 57114               #代理IP端口
+# proxyport = 57114          #代理IP端口
 proxyusernm = "15140409061"  # 代理帐号
 proxypasswd = "15140409061"  # 代理密码
 
-# proxyurl="http://"+proxyusernm+":"+proxypasswd+"@"+proxyaddr+":"+"%d"%proxyport
 
-# 获取ip池的ip列表
+#获取所有股吧有的股票种类信息
+def get_stock_list() -> list:
+    st_list = []
+    find_stock_data(stock_list_url=H_dataurl, stock_list=st_list)
+    find_stock_data(stock_list_url=S_dataurl, stock_list=st_list)
+
+    return st_list
+
+# 获取ip池的ip列表 使用API
+
+
 def get_all_ip():
     iplist = []
     print("开始获取ip池")
-    resp = request.build_opener().open(ip_pool_api)
-    text = resp.read().decode()
+    try:
+        resp = request.build_opener().open(ip_pool_api)
+        text = resp.read().decode()
+    except Exception as e:
+        print(e)
     iplist = text.split("\r\n")
     iplist.remove("")
 
     return iplist
 
-# 获取
+# 使用ip池 随机生成opener
+
+
 def get_radom_opener():
     ip = random.sample(get_all_ip(), 1)
     ip = ip.pop(0)
 
     proxyurl = "http://"+proxyusernm+":"+proxypasswd+"@" + ip
 
-
     proxy = request.ProxyHandler({"http": proxyurl, "https": proxyurl})
     return request.build_opener(proxy)
 
 # 获取单个股吧评论
+
+
 def get_comment(stock: dict, num: int):
     page = 0
     com_list = []
@@ -72,6 +88,8 @@ def get_comment(stock: dict, num: int):
         text = None
 
         while True:
+
+            # 使用try catch 如果连接失败就去获取ip池的代理 直到成功
             try:
                 resp = request.urlopen(m_request, timeout=5)
                 text = resp.read().decode()
@@ -84,7 +102,7 @@ def get_comment(stock: dict, num: int):
         soup = bs4.BeautifulSoup(text, "html.parser")
 
         # soup查找
-        result = soup.find_all(attrs={"class": "articleh"})
+        result = soup.find_all(attrs={"class": "articleh"}, id=False)
         print(f"该页找到{len(result)}条数据")
         if len(result) == 0:
             print(f"已经获取了所有{len(com_list)}")
@@ -125,16 +143,17 @@ def get_comment(stock: dict, num: int):
 
                 index += 1
 
-
             com_list.append(temp_dict)
 
             if com_list.__len__() >= num:
                 break
-    
+
     print(len(com_list))
     return com_list
 
 # 获取股票页面的所有股票信息
+
+
 def find_stock_data(stock_list_url: str, stock_list: list):
     # 获取全部html文本
     resp = request.urlopen(url=stock_list_url)
@@ -168,23 +187,50 @@ def find_stock_data(stock_list_url: str, stock_list: list):
 
             stock_list.append(temp_dict)
 
+# 创造 excel Workbook
 
-# 导入excel
-def com2excel(com_list):
+
+def creat_excel() -> Workbook:
     wb = Workbook()
-    sheet = wb[wb.sheetnames[0]]
 
-    # 标题
+    return wb
+
+
+# sheet 添加标题头
+def add_sheet_head(sheet):
     sheet.append(["readed", "comment", "title", "author",
                  "update_time", "page", "code", "name"])
+
+
+# 导入excel 分开sheet
+
+
+def append2excel(com_list, wb: Workbook, sheet_name: str, index, save_path):
+    # 去掉非法字符
+    sheet_name = sheet_name.replace("*", "")
+
+    sheet = wb.create_sheet(sheet_name, index=index)
+    add_sheet_head(sheet)
 
     for idct in com_list:
         sheet.append(idct)
 
+    print("写入中请勿关闭")
     wb.save(save_path)
-    print("done")
+    print(f"写入{index} {sheet_name}完毕")
+
+
+def append2sheet(com_list, sheet, save_path, wb: Workbook):
+    for idct in com_list:
+        sheet.append(idct)
+
+    print("写入中请勿关闭")
+    wb.save(save_path)
+    print("该类股票写入完成")
 
 # 转成excel能用的
+
+
 def normalize_excel_dict(com_list):
     new_list = []
     for item in com_list:
@@ -200,34 +246,67 @@ def normalize_excel_dict(com_list):
         new_list.append(tempdict)
     return new_list
 
+
+# 获得股票list里面的所有comment 并保存
+def get_all_comment(select_list, is_divide_sheet, com_num, save_path):
+    wb = creat_excel()
+    sheet = wb[wb.sheetnames[0]]
+    if not is_divide_sheet:
+        add_sheet_head(sheet=sheet)
+
+    # 遍历获取评论
+    for index, stock in enumerate(select_list):
+        print("开始获取"+stock.get("name"))
+        com = get_comment(stock=stock, num=com_num)
+        print("获取完毕")
+        # 一边获取一边写入
+
+        if is_divide_sheet:
+            append2excel(com_list=normalize_excel_dict(com), wb=wb, sheet_name=stock.get(
+                "name"), index=index, save_path=save_path)
+        else:
+            append2sheet(com_list=normalize_excel_dict(com),
+                         sheet=sheet, save_path=save_path, wb=wb)
+        gc.collect()
+
+
 def main():
+    # 设定参数
     temp = input("输入股票数量:\n")
     st_num = int(temp)
     temp = input("输入每种股票评论数量:\n")
     com_num = int(temp)
+    is_divide_sheet = False
+    while True:
+        temp = input("是否分开sheet保存 y/n\n")
+        if temp == "y":
+            is_divide_sheet = True
+            break
+        elif temp == "n":
+            is_divide_sheet = False
+            break
+        else:
+            print("输入有误请重新输入")
 
     # 获取所有股票类型列表信息
-    st_list = []
-    find_stock_data(stock_list_url=H_dataurl, stock_list=st_list)
-    find_stock_data(stock_list_url=S_dataurl, stock_list=st_list)
+    st_list = get_stock_list()
 
     # 随机抽取指定数量的股票
     select_list = random.sample(st_list, st_num)
     print("抽取的股票类型:")
     print(select_list)
 
-    com_list = []
-    # 遍历获取评论
-    for stock in select_list:
-        print("开始获取"+stock.get("name"))
-        com = get_comment(stock=stock, num=com_num)
-        com_list.extend(com)
-        print("获取完毕")
-        sleep(1)
+    get_all_comment(select_list=select_list,is_divide_sheet=is_divide_sheet,com_num=com_num,save_path=save_path)
 
-    print("开始转录excel")
-    com2excel(com_list=normalize_excel_dict(com_list))
+    print("done")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("错误 建议截图发给我")
+        info = sys.exc_info()
+        print(info)
+        print(e)
+        input("回车退出")

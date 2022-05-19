@@ -304,6 +304,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+        input("done")
     except Exception as e:
         print("错误 建议截图发给我")
         info = sys.exc_info()

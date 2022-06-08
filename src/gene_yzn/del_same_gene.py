@@ -1,4 +1,5 @@
 import os
+import random
 
 #输入文件路径
 gene_file_path = os.path.dirname(__file__) + "/1-3"
@@ -56,8 +57,9 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(e)
-        input("回车退出")
+    # try:
+    #     main()
+    # except Exception as e:
+    #     print(e)
+    #     input("回车退出")
+    print(random.randint(1,100))
